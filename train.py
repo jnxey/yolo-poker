@@ -9,16 +9,18 @@ if torch.cuda.is_available():
 # 加载预训练模型
 model = YOLO('yolov8n.pt')
 
-# y8n('./images/demo.jpg', show=True, save=True) # 单个图片分析
+def run():
+    model.train(
+        data='data.yaml',  # 数据集配置文件路径
+        epochs=50,  # 训练轮次
+        imgsz=640,  # 输入图片尺寸
+        batch=32,  # 每次训练的批量
+        device=0,  # 训练方式 GPU=0，CPU='cpu'
+        amp=False,   # 关闭自动混合精度
+        workers=0   # 关键：在 Windows 上建议先改成 0
+    )
 
-model.train(
-    data='data.yaml',  # 数据集配置文件路径
-    epochs=20,  # 训练轮次
-    imgsz=640,  # 输入图片尺寸
-    batch=32,  # 每次训练的批量
-    device=0,  # 训练方式 GPU=0，CPU='cpu'
-    amp=False,   # 关闭自动混合精度
-    workers=0   # 关键：在 Windows 上建议先改成 0
-)
+if __name__ == "__main__":   # 必须加这句
+    run()
 
 print('模型训练完毕')
