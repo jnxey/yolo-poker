@@ -12,11 +12,12 @@ model = YOLO('yolov8n.pt')
 def run():
     model.train(
         data='data.yaml',  # 数据集配置文件路径
-        epochs=50,  # 训练轮次
+        epochs=100,  # 训练轮次
         imgsz=640,  # 输入图片尺寸
         batch=32,  # 每次训练的批量
         device=0,  # 训练方式 GPU=0，CPU='cpu'
         amp=False,   # 关闭自动混合精度
+        val=False,   # 不做验证
         workers=0   # 关键：在 Windows 上建议先改成 0
     )
 

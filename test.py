@@ -3,13 +3,13 @@ from ultralytics import YOLO # pip install ultralytics
 # 加载预训练模型
 # 加载预训练模型
 # model = YOLO('yolov8n.pt')
-model = YOLO('./runs/detect/train2/weights/best.pt')
+model = YOLO('./runs/detect/train/weights/best.pt')
 
 # 单张图片推理
 results = model.predict(
     data='data.yaml',
-    source='./pokers/test/t2.png',  # 确保路径存在，尽量避免中文目录
-    conf=0.8,
+    source='./pokers/test/17.png',  # 确保路径存在，尽量避免中文目录
+    conf=0.25,
     device='cpu',
     save=True
 )
