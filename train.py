@@ -7,14 +7,14 @@ if torch.cuda.is_available():
     print("GPU 名称:", torch.cuda.get_device_name(0))
 
 # 加载预训练模型
-model = YOLO('yolov8n.pt')
+model = YOLO('yolov8m.pt')
 
 def run():
     model.train(
         data='data.yaml',  # 数据集配置文件路径
         epochs=100,  # 训练轮次
         imgsz=640,  # 输入图片尺寸
-        batch=32,  # 每次训练的批量
+        batch=8,  # 每次训练的批量
         device=0,  # 训练方式 GPU=0，CPU='cpu'
         amp=False,   # 关闭自动混合精度
         val=False,   # 不做验证
