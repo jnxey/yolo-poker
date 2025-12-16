@@ -1,0 +1,39 @@
+path: D:\Work\yolo-poker\ma-jiang
+train: images/train
+val: images/val
+names:
+  - circle_9
+  - bamboo_2
+  - bamboo_3
+  - bamboo_4
+  - bamboo_5
+  - bamboo_6
+  - bamboo_8
+  - bamboo_9
+  - circle_8
+  - circle_7
+  - circle_4
+  - circle_2
+  - circle_1
+  - circle_3
+  - circle_5
+  - bamboo_7
+  - circle_6
+  - bamboo_1
+  - character_9
+  - character_8
+  - character_7
+  - character_6
+  - character_5
+  - character_3
+  - character_2
+  - character_4
+  - green
+  - red
+  - north
+  - east
+  - character_1
+  - white
+  - west
+  - south
+nc: 34

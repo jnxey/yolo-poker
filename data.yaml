@@ -55,17 +55,3 @@ names:
   49: QD
   50: QH
   51: QS
-##
-#path: D:\Work\yolo-poker\poker-2
-#train: images/train
-#val: images/val
-#
-#nc: 53
-#names: ['10D', '10H', '10S', '10C', '2D', '2H', '2S', '2C', '3D', '3H', '3S', '3C', '4D', '4H', '4S', '4T', '5D', '5H', '5S', '5C', '59', '6D', '6H', '6S', '6C', '7D', '7H', '7S', '7C', '8D', '8H', '8S', '8C', '9D', '9H', '9S', '9C', 'AD', 'AH', 'AS', 'AC', 'JD', 'JH', 'JS', 'JC', 'KD', 'KH', 'KS', 'KC', 'QD', 'QH', 'QS', 'QC']
-#
-#roboflow:
-#  workspace: roboflow-100
-#  project: poker-cards-cxcvz
-#  version: 2
-#  license: CC BY 4.0
-#  url: https://universe.roboflow.com/roboflow-100/poker-cards-cxcvz/dataset/2

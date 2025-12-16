@@ -1,0 +1,27 @@
+from ultralytics import YOLO # pip install ultralytics
+import torch # pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128 版本号按系统的来
+
+print("torch 版本:", torch.__version__)
+print("CUDA 是否可用:", torch.cuda.is_available())
+if torch.cuda.is_available():
+    print("GPU 名称:", torch.cuda.get_device_name(0))
+
+# 加载预训练模型
+model = YOLO('yolov8m.pt')
+
+def run():
+    model.train(
+        data='data-majiang.yaml',  # 数据集配置文件路径
+        epochs=100,  # 训练轮次
+        imgsz=640,  # 输入图片尺寸
+        batch=8,  # 每次训练的批量
+        device=0,  # 训练方式 GPU=0，CPU='cpu'
+        amp=False,   # 关闭自动混合精度
+        val=False,   # 不做验证
+        workers=0   # 关键：在 Windows 上建议先改成 0
+    )
+
+if __name__ == "__main__":   # 必须加这句
+    run()
+
+print('模型训练完毕')
