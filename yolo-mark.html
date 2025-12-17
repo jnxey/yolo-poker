@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <title>YOLO 标注工具（带辅助线）</title>
+    <style>
+        body { font-family: Arial, sans-serif; background:#f5f5f5; }
+        .toolbar { margin-bottom:10px; }
+        canvas { border:1px solid #333; background:#000; cursor:crosshair; }
+        .info { margin-top:8px; font-size:14px; }
+    </style>
+</head>
+<body>
+
+<h2>YOLO 标注工具（鼠标辅助线）</h2>
+<div class="toolbar">
+    <input type="file" id="imgInput" accept="image/*" />
+    <button id="exportBtn">导出 YOLO 标注</button>
+</div>
+
+<canvas id="canvas"></canvas>
+<div class="info" id="info"></div>
+
+<script>
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext('2d');
+  const info = document.getElementById('info');
+
+  let img = new Image();
+  let boxes = []; // {x,y,w,h}
+  let startX = 0, startY = 0;
+  let isDrawing = false;
+  let mouseX = 0, mouseY = 0;
+
+  // 加载图片
+  document.getElementById('imgInput').addEventListener('change', e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    img.src = URL.createObjectURL(file);
+  });
+
+  img.onload = () => {
+    canvas.width = img.width;
+    canvas.height = img.height;
+    redraw();
+  };
+
+  canvas.addEventListener('mousedown', e => {
+    const rect = canvas.getBoundingClientRect();
+    startX = e.clientX - rect.left;
+    startY = e.clientY - rect.top;
+    isDrawing = true;
+  });
+
+  canvas.addEventListener('mousemove', e => {
+    const rect = canvas.getBoundingClientRect();
+    mouseX = e.clientX - rect.left;
+    mouseY = e.clientY - rect.top;
+    redraw();
+
+    if (isDrawing) {
+      ctx.strokeStyle = 'red';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(startX, startY, mouseX - startX, mouseY - startY);
+    }
+
+    info.innerText = `x:${mouseX.toFixed(0)}, y:${mouseY.toFixed(0)}`;
+  });
+
+  canvas.addEventListener('mouseup', () => {
+    if (!isDrawing) return;
+    isDrawing = false;
+    const w = mouseX - startX;
+    const h = mouseY - startY;
+    if (Math.abs(w) > 5 && Math.abs(h) > 5) {
+      boxes.push({ x: startX, y: startY, w, h });
+    }
+    redraw();
+  });
+
+  function redraw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, 0, 0);
+
+    // 已有框
+    ctx.strokeStyle = 'lime';
+    ctx.lineWidth = 2;
+    boxes.forEach(b => ctx.strokeRect(b.x, b.y, b.w, b.h));
+
+    // 辅助线
+    ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(mouseX, 0);
+    ctx.lineTo(mouseX, canvas.height);
+    ctx.moveTo(0, mouseY);
+    ctx.lineTo(canvas.width, mouseY);
+    ctx.stroke();
+  }
+
+  // 导出 YOLO
+  document.getElementById('exportBtn').addEventListener('click', () => {
+    const lines = boxes.map(b => {
+      const xCenter = (b.x + b.w / 2) / canvas.width;
+      const yCenter = (b.y + b.h / 2) / canvas.height;
+      const w = Math.abs(b.w) / canvas.width;
+      const h = Math.abs(b.h) / canvas.height;
+      const classId = 0; // 默认类别
+      return `${classId} ${xCenter.toFixed(6)} ${yCenter.toFixed(6)} ${w.toFixed(6)} ${h.toFixed(6)}`;
+    });
+
+    const blob = new Blob([lines.join('\n')], { type: 'text/plain' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'labels.txt';
+    a.click();
+  });
+</script>
+
+</body>
+</html>
