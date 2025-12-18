@@ -1,0 +1,7 @@
+path: D:\Work\yolo-poker\chips
+train: images/train
+val: images/val
+names:
+  - chip-small
+  - chip-big
+nc: 2

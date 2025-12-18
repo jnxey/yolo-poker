@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>AVIF 批量转 JPG（ZIP）</title>
+    <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+    <style>
+        body { font-family: Arial; padding: 30px; }
+        .log { margin-top: 15px; font-size: 14px; }
+    </style>
+</head>
+<body>
+
+<h2>AVIF 批量转 JPG（打包 ZIP 下载）</h2>
+
+<input type="file" id="fileInput" accept=".avif,image/avif" multiple />
+<br><br>
+<button id="start">开始转换并下载 ZIP</button>
+
+<div class="log" id="log"></div>
+
+<script>
+  const input = document.getElementById('fileInput');
+  const startBtn = document.getElementById('start');
+  const log = document.getElementById('log');
+
+  function logMsg(msg) {
+    log.innerHTML += msg + '<br>';
+  }
+
+  startBtn.onclick = async () => {
+    const files = Array.from(input.files);
+    if (!files.length) {
+      alert('请选择 AVIF 图片');
+      return;
+    }
+
+    const zip = new JSZip();
+
+    for (const file of files) {
+      await convertAndAddToZip(file, zip);
+    }
+
+    logMsg('📦 正在生成 ZIP...');
+
+    const blob = await zip.generateAsync({ type: 'blob' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'avif_to_jpg.zip';
+    a.click();
+  };
+
+  function convertAndAddToZip(file, zip) {
+    return new Promise((resolve) => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        canvas.getContext('2d').drawImage(img, 0, 0);
+
+        canvas.toBlob(blob => {
+          const name = file.name.replace(/\.avif$/i, '.jpg');
+          zip.file(name, blob);
+          logMsg(`✔ 已转换：${name}`);
+          URL.revokeObjectURL(url);
+          resolve();
+        }, 'image/jpeg', 0.92);
+      };
+
+      img.onerror = () => {
+        logMsg(`❌ 不支持的 AVIF：${file.name}`);
+        resolve();
+      };
+
+      img.src = url;
+    });
+  }
+</script>
+
+</body>
+</html>

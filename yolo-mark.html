@@ -27,6 +27,7 @@
   const info = document.getElementById('info');
 
   let img = new Image();
+  let imageFileName = '';
   let boxes = []; // {x,y,w,h}
   let startX = 0, startY = 0;
   let isDrawing = false;
@@ -35,6 +36,7 @@
   // 加载图片
   document.getElementById('imgInput').addEventListener('change', e => {
     const file = e.target.files[0];
+    imageFileName = file.name.replace(/\.[^/.]+$/, '');
     if (!file) return;
     img.src = URL.createObjectURL(file);
   });
@@ -88,7 +90,7 @@
     boxes.forEach(b => ctx.strokeRect(b.x, b.y, b.w, b.h));
 
     // 辅助线
-    ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+    ctx.strokeStyle = 'rgba(11,78,221,0.73)';
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(mouseX, 0);
@@ -105,14 +107,14 @@
       const yCenter = (b.y + b.h / 2) / canvas.height;
       const w = Math.abs(b.w) / canvas.width;
       const h = Math.abs(b.h) / canvas.height;
-      const classId = 0; // 默认类别
+      const classId = 1; // 默认类别
       return `${classId} ${xCenter.toFixed(6)} ${yCenter.toFixed(6)} ${w.toFixed(6)} ${h.toFixed(6)}`;
     });
 
     const blob = new Blob([lines.join('\n')], { type: 'text/plain' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = 'labels.txt';
+    a.download = imageFileName ? `${imageFileName}.txt` : 'labels.txt';
     a.click();
   });
 </script>

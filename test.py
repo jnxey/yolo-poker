@@ -1,18 +1,21 @@
 from ultralytics import YOLO # pip install ultralytics
+import time
 
-# 加载预训练模型
 # 加载预训练模型
 # model = YOLO('yolov8n.pt')
-model = YOLO('./runs/detect/train3/weights/best.pt')
+model = YOLO('./chips-best8m.pt')
 
 # 单张图片推理
+t1 = time.time()
 results = model.predict(
-    data='data.yaml',
-    source='./pokers/test/t4.jpeg',  # 确保路径存在，尽量避免中文目录
-    conf=0.7,
+    data='data-chips.yaml',
+    source='./t20.jpg',  # 确保路径存在，尽量避免中文目录
+    conf=0.3,
     device='cpu',
-    save=True
+    save=True,
+    show=False
 )
+print("YOLO耗时:", time.time()-t1)
 
 # 遍历结果
 for r in results:
