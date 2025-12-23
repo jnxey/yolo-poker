@@ -2,65 +2,55 @@ import cv2
 import numpy as np
 import math
 
-# 计算三点夹角
-def angle(p1, p2, p3):
-    a = np.linalg.norm(p2 - p3)
-    b = np.linalg.norm(p1 - p3)
-    c = np.linalg.norm(p1 - p2)
-    if a*b == 0:
-        return 0
-    return math.degrees(math.acos((a*a + b*b - c*c) / (2*a*b)))
+# 1. 读取图片
+image = cv2.imread('t30.png')
+gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+_, thresh = cv2.threshold(gray, 200, 255, cv2.THRESH_BINARY_INV)  # 假设三角形是深色
 
-# 判断是否为L形轮廓
-def is_l_shape(contour):
-    peri = cv2.arcLength(contour, True)
-    approx = cv2.approxPolyDP(contour, 0.05 * peri, True)
-    if len(approx) < 3:
-        return False, None
-    # 遍历所有三点组合
-    pts = approx.reshape(-1, 2)
-    for i in range(len(pts)):
-        p1 = pts[i]
-        p2 = pts[(i+1)%len(pts)]
-        p3 = pts[(i+2)%len(pts)]
-        ang = angle(p1, p2, p3)
-        if 70 < ang < 110:  # 允许 ±20° 误差
-            return True, (p1, p2, p3)
-    return False, None
+# 2. 找轮廓
+contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-# 主函数
-def detect_rotated_corner(img_path):
-    img = cv2.imread(img_path)
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    _, bin_img = cv2.threshold(gray, 200, 255, cv2.THRESH_BINARY_INV)
+tri_centers = []
 
-    # 边缘检测
-    edges = cv2.Canny(bin_img, 50, 150)
-    contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+for cnt in contours:
+    approx = cv2.approxPolyDP(cnt, 0.04 * cv2.arcLength(cnt, True), True)
+    area = cv2.contourArea(cnt)
+    if len(approx) == 3 and 50 < area < 5000:  # 三角形且面积合理
+        M = cv2.moments(cnt)
+        cx = int(M['m10']/M['m00'])
+        cy = int(M['m01']/M['m00'])
+        tri_centers.append((cx, cy))
+        cv2.drawContours(image, [approx], 0, (0,255,0), 2)
 
-    l_corners = []
-    for cnt in contours:
-        ok, pts = is_l_shape(cnt)
-        if ok:
-            l_corners.append(pts)
-            # 可视化角标
-            for pt in pts:
-                cv2.circle(img, tuple(pt), 5, (0, 0, 255), -1)
+# 确保只取两个三角形
+if len(tri_centers) != 2:
+    print("未找到两个三角形")
+    exit()
 
-    # 如果检测到至少2个角标，生成 ROI
-    if len(l_corners) >= 2:
-        all_points = np.array([pt for corner in l_corners for pt in corner])
-        x_min = np.min(all_points[:,0])
-        y_min = np.min(all_points[:,1])
-        x_max = np.max(all_points[:,0])
-        y_max = np.max(all_points[:,1])
-        roi = img[y_min:y_max, x_min:x_max]
-        cv2.rectangle(img, (x_min,y_min), (x_max,y_max), (0,255,0), 2)
-        cv2.imshow("ROI", roi)
+(x1, y1), (x2, y2) = tri_centers
 
-    cv2.imshow("Detected Corners", img)
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
+# 3. 计算旋转角度
+angle_rad = math.atan2(y2 - y1, x2 - x1)
+angle_deg = math.degrees(angle_rad)
 
-# 测试
-detect_rotated_corner("t30.png")
+# 4. 旋转图片
+h, w = image.shape[:2]
+center = ((x1+x2)//2, (y1+y2)//2)
+M = cv2.getRotationMatrix2D(center, -angle_deg, 1.0)
+rotated = cv2.warpAffine(image, M, (w, h))
+
+# 5. 裁剪 code 区域
+padding = 10  # 可调整
+x_min = min(x1, x2) - padding
+x_max = max(x1, x2) + padding
+y_min = min(y1, y2) - padding
+y_max = max(y1, y2) + 2*padding  # code 在三角形上方
+
+code_crop = rotated[y_min:y_max, x_min:x_max]
+
+# 显示结果
+cv2.imshow("triangles", image)
+cv2.imshow("rotated", rotated)
+cv2.imshow("code", code_crop)
+cv2.waitKey(0)
+cv2.destroyAllWindows()
