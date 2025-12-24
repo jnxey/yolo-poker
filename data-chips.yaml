@@ -1,7 +1,5 @@
-path: D:\Work\yolo-poker\chips
+path: D:/Work/yolo-poker/chips-angle-bak
 train: images/train
 val: images/val
 names:
-  - chip-small
-  - chip-big
-nc: 2
+  0: chip

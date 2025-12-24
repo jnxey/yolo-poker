@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>YOLO OBB 标注工具</title>
+    <style>
+        body { font-family: sans-serif; display:flex; flex-direction:column; align-items:center; }
+        canvas { border:1px solid #333; cursor:crosshair; }
+        #controls { margin-top:10px; }
+    </style>
+</head>
+<body>
+<h2>YOLO OBB 标注工具 (可旋转可移动，带辅助线)</h2>
+<input type="file" id="imgLoader" multiple accept="image/*">
+<div id="controls">
+    类别ID: <input type="number" id="classId" value="0" style="width:50px;">
+    <button id="prevImg">上一张</button>
+    <button id="nextImg">下一张</button>
+    <button id="download">导出 Labels</button>
+</div>
+<canvas id="canvas" width="800" height="600"></canvas>
+
+<script>
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext('2d');
+
+  let images=[], curIndex=0;
+  let img=new Image();
+  let labels={};
+
+  let mode=null; // "draw","move","rotate"
+  let tempRect=null;
+  let startX=0, startY=0;
+  let rotateOffset=0;
+
+  let mouseX=0, mouseY=0;
+  let showGuide=false;
+
+  // 加载图片
+  document.getElementById('imgLoader').addEventListener('change',(e)=>{
+    images=Array.from(e.target.files);
+    curIndex=0;
+    loadImage();
+  });
+
+  function loadImage(){
+    if(!images[curIndex]) return;
+    img.src=URL.createObjectURL(images[curIndex]);
+    img.onload=()=>draw();
+  }
+
+  // 绘制所有内容
+  function draw(){
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    ctx.drawImage(img,0,0,canvas.width,canvas.height);
+    const name=images[curIndex]?.name;
+    if(labels[name]){
+      labels[name].forEach(l=>drawRect(l,'red'));
+    }
+    if(tempRect) drawRect(tempRect,'blue');
+    drawGuideLine();
+  }
+
+  // 绘制单个矩形
+  function drawRect(r,color='red'){
+    const cx=r.x*canvas.width, cy=r.y*canvas.height;
+    const w=r.w*canvas.width, h=r.h*canvas.height;
+    const angle=r.angle;
+    ctx.save();
+    ctx.translate(cx,cy);
+    ctx.rotate(angle);
+    ctx.strokeStyle=color;
+    ctx.lineWidth=2;
+    ctx.strokeRect(-w/2,-h/2,w,h);
+    // 绘制旋转小圆点
+    ctx.fillStyle='green';
+    ctx.beginPath();
+    ctx.arc(w/2, -h/2, 6, 0, Math.PI*2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // 检查旋转点
+  function checkRotateHandle(mx,my,r){
+    const cx=r.x*canvas.width, cy=r.y*canvas.height;
+    const w=r.w*canvas.width, h=r.h*canvas.height;
+    const angle=r.angle;
+    const rx=cx + Math.cos(angle)*(w/2) - Math.sin(angle)*(-h/2);
+    const ry=cy + Math.sin(angle)*(w/2) + Math.cos(angle)*(-h/2);
+    return Math.hypot(mx-rx,my-ry)<8;
+  }
+
+  // 检查是否在矩形内
+  function checkInside(mx,my,r){
+    const cx=r.x*canvas.width, cy=r.y*canvas.height;
+    const w=r.w*canvas.width, h=r.h*canvas.height;
+    const angle=-r.angle;
+    const dx=mx-cx, dy=my-cy;
+    const x = dx*Math.cos(angle) - dy*Math.sin(angle);
+    const y = dx*Math.sin(angle) + dy*Math.cos(angle);
+    return Math.abs(x)<=w/2 && Math.abs(y)<=h/2;
+  }
+
+  // 绘制辅助线
+  function drawGuideLine(){
+    if(!showGuide) return;
+    ctx.save();
+    ctx.strokeStyle='rgba(0,0,255,0.5)';
+    ctx.lineWidth=1;
+    // 垂直线
+    ctx.beginPath();
+    ctx.moveTo(mouseX,0);
+    ctx.lineTo(mouseX,canvas.height);
+    ctx.stroke();
+    // 水平线
+    ctx.beginPath();
+    ctx.moveTo(0,mouseY);
+    ctx.lineTo(canvas.width,mouseY);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // 鼠标事件
+  canvas.addEventListener('mousedown',(e)=>{
+    const mx=e.offsetX, my=e.offsetY;
+    mouseX=mx; mouseY=my;
+    const name=images[curIndex]?.name;
+    tempRect=null;
+    mode="draw";
+    if(labels[name]){
+      for(let i=labels[name].length-1;i>=0;i--){
+        const r=labels[name][i];
+        if(checkRotateHandle(mx,my,r)){
+          tempRect=r;
+          mode="rotate";
+          const cx=r.x*canvas.width, cy=r.y*canvas.height;
+          rotateOffset = Math.atan2(my-cy,mx-cx) - r.angle;
+          break;
+        } else if(checkInside(mx,my,r)){
+          tempRect=r;
+          mode="move";
+          break;
+        }
+      }
+    }
+    startX=mx; startY=my;
+    if(mode==="draw") tempRect={x:mx/canvas.width,y:my/canvas.height,w:0,h:0,angle:0,class_id:parseInt(document.getElementById('classId').value)};
+    draw();
+  });
+
+  canvas.addEventListener('mousemove',(e)=>{
+    const mx=e.offsetX,my=e.offsetY;
+    mouseX=mx; mouseY=my;
+    showGuide=true;
+
+    if(!mode) { draw(); return; }
+    const dx=mx-startX, dy=my-startY;
+
+    if(mode==="draw"){
+      let w=Math.abs(dx), h=Math.abs(dy);
+      if(w<h) [w,h]=[h,w];
+      tempRect.w=w/canvas.width;
+      tempRect.h=h/canvas.height;
+      tempRect.x=(startX+mx)/2/canvas.width;
+      tempRect.y=(startY+my)/2/canvas.height;
+      tempRect.angle=0;
+    } else if(mode==="move"){
+      tempRect.x += dx/canvas.width;
+      tempRect.y += dy/canvas.height;
+      startX=mx; startY=my;
+    } else if(mode==="rotate"){
+      const cx=tempRect.x*canvas.width, cy=tempRect.y*canvas.height;
+      tempRect.angle = Math.atan2(my-cy,mx-cx) - rotateOffset;
+    }
+    draw();
+  });
+
+  canvas.addEventListener('mouseup',(e)=>{
+    const name=images[curIndex]?.name;
+    if(mode==="draw"){
+      if(!labels[name]) labels[name]=[];
+      labels[name].push({...tempRect});
+    }
+    mode=null; tempRect=null; draw();
+  });
+
+  canvas.addEventListener('mouseleave',()=>{
+    showGuide=false;
+    draw();
+  });
+
+  // 翻页
+  document.getElementById('prevImg').addEventListener('click',()=>{ if(curIndex>0) curIndex--; loadImage(); });
+  document.getElementById('nextImg').addEventListener('click',()=>{ if(curIndex<images.length-1) curIndex++; loadImage(); });
+
+  // 导出
+  document.getElementById('download').addEventListener('click',()=>{
+    for(let f of images){
+      const name=f.name;
+      if(!labels[name]) continue;
+      const txt=labels[name].map(l=>`${l.class_id} ${l.x.toFixed(6)} ${l.y.toFixed(6)} ${l.w.toFixed(6)} ${l.h.toFixed(6)} ${l.angle.toFixed(6)}`).join('\n');
+      const blob=new Blob([txt],{type:'text/plain'});
+      const a=document.createElement('a');
+      a.href=URL.createObjectURL(blob);
+      a.download=name.replace(/\.[^/.]+$/,'')+'.txt';
+      a.click();
+    }
+  });
+</script>
+</body>
+</html>

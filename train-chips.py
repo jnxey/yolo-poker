@@ -7,10 +7,11 @@ if torch.cuda.is_available():
     print("GPU 名称:", torch.cuda.get_device_name(0))
 
 # 加载预训练模型
-model = YOLO('yolov8m.pt')
+model = YOLO('yolov8m-obb.pt')
 
 def run():
     model.train(
+        task="obb",
         data='data-chips.yaml',  # 数据集配置文件路径
         epochs=100,  # 训练轮次
         imgsz=640,  # 输入图片尺寸
@@ -18,7 +19,8 @@ def run():
         device=0,  # 训练方式 GPU=0，CPU='cpu'
         amp=False,   # 关闭自动混合精度
         val=False,   # 不做验证
-        workers=0   # 关键：在 Windows 上建议先改成 0
+        workers=0,   # 关键：在 Windows 上建议先改成 0
+        cache=False
     )
 
 if __name__ == "__main__":   # 必须加这句
