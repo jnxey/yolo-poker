@@ -7,11 +7,10 @@ if torch.cuda.is_available():
     print("GPU 名称:", torch.cuda.get_device_name(0))
 
 # 加载预训练模型
-model = YOLO('yolov8m-obb.pt')
+model = YOLO('yolo11m-obb.pt', task="detect")
 
 def run():
     model.train(
-        task="obb",
         data='data-chips.yaml',  # 数据集配置文件路径
         epochs=100,  # 训练轮次
         imgsz=640,  # 输入图片尺寸

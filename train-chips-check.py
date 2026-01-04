@@ -1,104 +1,65 @@
-# import math
-# from pathlib import Path
-#
-# bad = []
-#
-# for p in Path("chips-angle/labels/train").rglob("*.txt"):
-#     for i, line in enumerate(p.read_text().splitlines()):
-#         parts = line.strip().split()
-#         if len(parts) != 6:
-#             bad.append((p, i+1, "列数错误", line))
-#             continue
-#
-#         try:
-#             angle = float(parts[5])
-#         except:
-#             bad.append((p, i+1, "angle 非数字", line))
-#             continue
-#
-#         if not (-math.pi/2 <= angle < math.pi/2):
-#             bad.append((p, i+1, "angle 超范围", angle))
-#
-# if bad:
-#     for b in bad[:20]:
-#         print(b)
-# else:
-#     print("✔ 所有 angle 合法")
-
-# from pathlib import Path
-#
-# for p in Path("chips-angle/labels/train").rglob("*.txt"):
-#     for line in p.read_text().splitlines():
-#         parts = line.split()
-#         if len(parts) != 6:
-#             continue
-#         nums = list(map(float, parts[1:5]))
-#         if any(v <= 0 or v > 1 for v in nums):
-#             print("坐标非法:", p, line)
-#             raise SystemExit
-# print("✔ 坐标全部在 0~1")
-
-# from pathlib import Path
-#
-# bad = 0
-# total = 0
-#
-# for p in Path("chips-angle/labels/train").rglob("*.txt"):
-#     for line in p.read_text().splitlines():
-#         cls, x, y, w, h, a = line.split()
-#         w, h = float(w), float(h)
-#         total += 1
-#         if w < h:
-#             bad += 1
-#
-# print(f"总标注数: {total}")
-# print(f"w < h 的标注数: {bad}")
-
-# import math
-# from pathlib import Path
-#
-# def fix_obb(label_dir):
-#     for p in Path(label_dir).rglob("*.txt"):
-#         fixed = []
-#         for line in p.read_text().splitlines():
-#             cls, x, y, w, h, a = line.split()
-#             w, h, a = float(w), float(h), float(a)
-#
-#             if w < h:
-#                 w, h = h, w
-#                 a += math.pi / 2
-#
-#             # 归一化 angle 到 [-pi/2, pi/2)
-#             while a < -math.pi/2:
-#                 a += math.pi
-#             while a >= math.pi/2:
-#                 a -= math.pi
-#
-#             fixed.append(f"{cls} {x} {y} {w} {h} {a}")
-#
-#         p.write_text("\n".join(fixed))
-#
-# # 修改下面路径
-# fix_obb("chips-angle/labels/train")
-# # fix_obb("labels/val")
-
-
+import os
+import math
 from pathlib import Path
 
-img_dir = Path("D:/Work/yolo-poker/chips-angle/images/train")
-imgs = list(img_dir.rglob("*.jpg")) + list(img_dir.rglob("*.png"))
-print("训练图片数量:", len(imgs))
+# ===================== 配置区 =====================
+LABEL_DIR = r"D:\Work\yolo-poker\chips-angle\labels\train_bak"  # 原6列标签文件夹
+OUTPUT_DIR = r"D:\Work\yolo-poker\chips-angle\labels\train"  # 输出4点标签文件夹
+# ==================================================
 
-label_dir = Path("D:/Work/yolo-poker/chips-angle/labels/train")
-missing = []
+os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-for img in imgs:
-    lbl = label_dir / (img.stem + ".txt")
-    if not lbl.exists():
-        missing.append(img.name)
+def angle_to_points(xc, yc, w, h, angle):
+    """
+    将中心+宽高+旋转角度转换为四点坐标
+    xc, yc, w, h: 归一化坐标
+    angle: 弧度
+    返回: [(x1,y1), (x2,y2), (x3,y3), (x4,y4)]
+    """
+    # 先缩放到图片单位假设图片为 1x1
+    cos_a = math.cos(angle)
+    sin_a = math.sin(angle)
 
-print("缺失 label 的图片:", missing[:20])
+    # 四点相对中心的偏移
+    dx = w / 2
+    dy = h / 2
+    # 原始矩形四个角点
+    corners = [
+        (-dx, -dy),  # 左上
+        ( dx, -dy),  # 右上
+        ( dx,  dy),  # 右下
+        (-dx,  dy)   # 左下
+    ]
+    points = []
+    for px, py in corners:
+        x = xc + px * cos_a - py * sin_a
+        y = yc + px * sin_a + py * cos_a
+        points.append((x, y))
+    return points
 
+# 遍历所有标签文件
+for txt_file in Path(LABEL_DIR).glob("*.txt"):
+    output_file = Path(OUTPUT_DIR) / txt_file.name
+    lines_out = []
+    with open(txt_file, 'r', encoding='utf-8-sig') as f:
+        lines = [l.strip() for l in f if l.strip()]
+        for line in lines:
+            parts = line.split()
+            if len(parts) != 6:
+                print(f"跳过 {txt_file}: 非6列")
+                continue
+            cls, xc, yc, w, h, angle = parts
+            xc = float(xc)
+            yc = float(yc)
+            w = float(w)
+            h = float(h)
+            angle = float(angle)
+            points = angle_to_points(xc, yc, w, h, angle)
+            # flatten为 x1 y1 x2 y2 x3 y3 x4 y4
+            points_flat = [str(round(v, 6)) for p in points for v in p]
+            line_out = " ".join([cls] + points_flat)
+            lines_out.append(line_out)
+    with open(output_file, 'w', encoding='utf-8') as f:
+        f.write("\n".join(lines_out))
 
-
-
+print(f"✅ 转换完成，4点标签保存在: {OUTPUT_DIR}")
