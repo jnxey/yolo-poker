@@ -1,197 +1,200 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh">
 <head>
     <meta charset="UTF-8">
-    <title>YOLO OBB 四点标注工具</title>
+    <title>OBB 四点标注工具（ES5 兼容版 + 角度辅助线）</title>
     <style>
-        body { margin:0; font-family:sans-serif; }
-        #toolbar { padding:10px; background:#eee; }
-        canvas { border:1px solid #333; display:block; margin:10px auto; cursor:crosshair; }
+        body { margin:0; background:#222; color:#eee; font-family:Arial }
+        #toolbar { padding:8px; background:#333; display:flex; gap:10px; align-items:center }
+        canvas { display:block; margin:auto; background:#000; cursor:crosshair }
+        button { padding:6px 12px }
     </style>
 </head>
 <body>
-
 <div id="toolbar">
-    <input type="file" id="imgLoader" multiple>
-    <button id="prev">上一张</button>
-    <button id="next">下一张</button>
-    <button id="save">保存标注(.txt)</button>
-    <span id="info"></span>
+    <input type="file" id="imgInput" />
+    <button onclick="exportLabels()">导出标签</button>
+    <span>拖拽创建 | 点击选中 | 拖角点 | Q/E 旋转</span>
 </div>
-<canvas id="canvas" width="640" height="640"></canvas>
-
+<canvas id="c"></canvas>
 <script>
-  const canvas = document.getElementById('canvas');
-  const ctx = canvas.getContext('2d');
-  const imgLoader = document.getElementById('imgLoader');
-  const info = document.getElementById('info');
-  const prevBtn = document.getElementById('prev');
-  const nextBtn = document.getElementById('next');
-  const saveBtn = document.getElementById('save');
+  var canvas = document.getElementById('c');
+  var ctx = canvas.getContext('2d');
+  var img = new Image();
+  var boxes = [];
+  var current = null;
+  var dragging = false;
+  var start = null;
+  var selected = null;
+  var draggingPoint = null;
+  var mousePos = null;
 
-  let images=[], imgFiles=[], imgIndex=0, img=new Image();
-  let annotations={}; // {filename:[{cls,x,y,w,h,angle}]}
-  let dragging=false, startX=0, startY=0, currentBox=null;
-  let selectedBox=null;
-
-  // 旋转矩形类
-  class OBB {
-    constructor(x,y,w,h,angle=0){
-      this.x=x; this.y=y; this.w=w; this.h=h; this.angle=angle;
-      this.cls=0; // 默认class=0
+  function OBB(x1,y1,x2,y2){
+    this.cls = 0;
+    this.points = [
+      {x:x1,y:y1},
+      {x:x2,y:y1},
+      {x:x2,y:y2},
+      {x:x1,y:y2}
+    ];
+  }
+  OBB.prototype.center = function(){
+    var cx=0, cy=0;
+    for(var i=0;i<4;i++){ cx+=this.points[i].x; cy+=this.points[i].y; }
+    return {x:cx/4, y:cy/4};
+  };
+  OBB.prototype.rotate = function(a){
+    var c = this.center();
+    var cos = Math.cos(a), sin = Math.sin(a);
+    for(var i=0;i<4;i++){
+      var dx = this.points[i].x - c.x;
+      var dy = this.points[i].y - c.y;
+      this.points[i].x = c.x + dx*cos - dy*sin;
+      this.points[i].y = c.y + dx*sin + dy*cos;
     }
-    draw(ctx, selected=false){
+  };
+  OBB.prototype.draw = function(sel){
+    // 框
+    ctx.beginPath();
+    ctx.moveTo(this.points[0].x,this.points[0].y);
+    for(var i=1;i<4;i++) ctx.lineTo(this.points[i].x,this.points[i].y);
+    ctx.closePath();
+    ctx.strokeStyle = sel?'#00f':'#f00';
+    ctx.lineWidth = sel?3:2;
+    ctx.stroke();
+
+    // 角点
+    if(sel){
+      ctx.fillStyle='#0f0';
+      for(var i=0;i<4;i++){
+        ctx.beginPath();
+        ctx.arc(this.points[i].x,this.points[i].y,5,0,Math.PI*2);
+        ctx.fill();
+      }
+    }
+
+    // 角度辅助线（主轴）
+    var c = this.center();
+    var mx = (this.points[0].x + this.points[1].x)/2;
+    var my = (this.points[0].y + this.points[1].y)/2;
+    ctx.save();
+    ctx.strokeStyle='yellow';
+    ctx.lineWidth=2;
+    ctx.setLineDash([6,4]);
+    ctx.beginPath();
+    ctx.moveTo(c.x,c.y);
+    ctx.lineTo(mx,my);
+    ctx.stroke();
+    ctx.restore();
+  };
+  OBB.prototype.hit = function(x,y){
+    var inside=false;
+    for(var i=0,j=3;i<4;j=i++){
+      var xi=this.points[i].x, yi=this.points[i].y;
+      var xj=this.points[j].x, yj=this.points[j].y;
+      var intersect = ((yi>y)!=(yj>y)) && (x<(xj-xi)*(y-yi)/(yj-yi)+xi);
+      if(intersect) inside = !inside;
+    }
+    return inside;
+  };
+  OBB.prototype.hitPoint = function(x,y){
+    for(var i=0;i<4;i++){
+      var p=this.points[i];
+      if(Math.sqrt((p.x-x)*(p.x-x)+(p.y-y)*(p.y-y))<8) return i;
+    }
+    return -1;
+  };
+
+  function redraw(){
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    ctx.drawImage(img,0,0);
+
+    // 鼠标十字辅助线
+    if(mousePos){
       ctx.save();
-      ctx.translate(this.x,this.y);
-      ctx.rotate(this.angle);
-      ctx.strokeStyle = selected ? "blue" : "red";
-      ctx.lineWidth = selected ? 3 : 2;
-      ctx.strokeRect(-this.w/2,-this.h/2,this.w,this.h);
-      // 角度指示线
-      const len = this.h/2;
+      ctx.strokeStyle='rgba(0,255,255,0.6)';
+      ctx.lineWidth=1;
+      ctx.setLineDash([4,4]);
       ctx.beginPath();
-      ctx.moveTo(0,0);
-      ctx.lineTo(0,-len);
-      ctx.strokeStyle="green";
-      ctx.lineWidth=2;
+      ctx.moveTo(mousePos.x,0);
+      ctx.lineTo(mousePos.x,canvas.height);
+      ctx.moveTo(0,mousePos.y);
+      ctx.lineTo(canvas.width,mousePos.y);
       ctx.stroke();
       ctx.restore();
     }
-    getCorners(){
-      const cosA=Math.cos(this.angle), sinA=Math.sin(this.angle);
-      const dx=this.w/2, dy=this.h/2;
-      const corners=[
-        {x:-dx,y:-dy},
-        {x:dx,y:-dy},
-        {x:dx,y:dy},
-        {x:-dx,y:dy}
-      ];
-      return corners.map(p=>{
-        return {
-          X:this.x + p.x * cosA - p.y * sinA,
-          Y:this.y + p.x * sinA + p.y * cosA
-        }
-      });
-    }
+
+    for(var i=0;i<boxes.length;i++) boxes[i].draw(boxes[i]===selected);
   }
 
-  // 绘制
-  let mouseX=0, mouseY=0;
-  function draw(){
-    ctx.clearRect(0,0,canvas.width,canvas.height);
-    ctx.drawImage(img,0,0,canvas.width,canvas.height);
-    const anns = annotations[images[imgIndex]] || [];
-    for(const box of anns) box.draw(ctx, box===selectedBox);
-    if(currentBox) currentBox.draw(ctx,true);
-    // 辅助线
-    if(mouseX && mouseY){
-      ctx.strokeStyle='green';
-      ctx.lineWidth=1;
-      ctx.beginPath();
-      ctx.moveTo(mouseX,0); ctx.lineTo(mouseX,canvas.height);
-      ctx.moveTo(0,mouseY); ctx.lineTo(canvas.width,mouseY);
-      ctx.stroke();
-    }
-  }
-
-  // 鼠标事件
-  canvas.addEventListener('mousemove', e=>{
-    const rect = canvas.getBoundingClientRect();
-    mouseX = e.clientX - rect.left;
-    mouseY = e.clientY - rect.top;
-    if(dragging){
-      const mx = mouseX;
-      const my = mouseY;
-      const w = Math.abs(mx-startX);
-      const h = Math.abs(my-startY);
-      const x = (startX+mx)/2;
-      const y = (startY+my)/2;
-      currentBox.x=x; currentBox.y=y; currentBox.w=w; currentBox.h=h;
-    }
-    draw();
-  });
-
-  canvas.addEventListener('mousedown', e=>{
-    dragging=true;
-    startX=mouseX;
-    startY=mouseY;
-    selectedBox=null;
-    const anns = annotations[images[imgIndex]] || [];
-    for(let box of anns){
-      const dx = mouseX - box.x;
-      const dy = mouseY - box.y;
-      const cosA=Math.cos(-box.angle), sinA=Math.sin(-box.angle);
-      const lx=dx*cosA - dy*sinA;
-      const ly=dx*sinA + dy*cosA;
-      if(lx>=-box.w/2 && lx<=box.w/2 && ly>=-box.h/2 && ly<=box.h/2){
-        selectedBox=box;
-        dragging=false;
-        draw();
-        return;
-      }
-    }
-    currentBox=new OBB(startX,startY,0,0,0);
-  });
-
-  canvas.addEventListener('mouseup', e=>{
-    if(currentBox){
-      dragging=false;
-      if(!annotations[images[imgIndex]]) annotations[images[imgIndex]]=[];
-      annotations[images[imgIndex]].push(currentBox);
-      currentBox=null;
-    }
-    draw();
-  });
-
-  // 旋转选中框
-  window.addEventListener('keydown', e=>{
-    if(!selectedBox) return;
-    if(e.key==='q') selectedBox.angle-=0.1;
-    if(e.key==='e') selectedBox.angle+=0.1;
-    draw();
-  });
-
-  // 加载图片
-  imgLoader.addEventListener('change', e=>{
-    imgFiles = Array.from(e.target.files);
-    images = imgFiles.map(f=>f.name);
-    imgIndex=0;
-    loadImage();
-  });
-
-  function loadImage(){
-    const file = imgFiles[imgIndex];
-    const reader = new FileReader();
-    reader.onload=ev=>{
-      img.src=ev.target.result;
-      img.onload=draw;
-      info.textContent=`图片: ${images[imgIndex]} (${imgIndex+1}/${images.length})`;
+  document.getElementById('imgInput').onchange = function(e){
+    var f = e.target.files[0];
+    img.onload=function(){
+      canvas.width = img.width;
+      canvas.height = img.height;
+      boxes=[];
+      redraw();
     };
-    reader.readAsDataURL(file);
-  }
+    img.src = URL.createObjectURL(f);
+  };
 
-  // 上一张/下一张
-  prevBtn.addEventListener('click', ()=>{ if(imgIndex>0){ imgIndex--; selectedBox=null; loadImage(); }});
-  nextBtn.addEventListener('click', ()=>{ if(imgIndex<images.length-1){ imgIndex++; selectedBox=null; loadImage(); }});
-
-  // 保存为四点归一化 txt
-  saveBtn.addEventListener('click', ()=>{
-    const canvasW=canvas.width;
-    const canvasH=canvas.height;
-    for(const [fname, boxes] of Object.entries(annotations)){
-      const lines=boxes.map(b=>{
-        const pts = b.getCorners();
-        const coords = pts.map(p=>[(p.X/canvasW).toFixed(6),(p.Y/canvasH).toFixed(6)]).flat();
-        return [b.cls, ...coords].join(' ');
-      });
-      const dataStr="data:text/plain;charset=utf-8,"+encodeURIComponent(lines.join("\n"));
-      const dlAnchor=document.createElement('a');
-      dlAnchor.setAttribute("href",dataStr);
-      dlAnchor.setAttribute("download", fname.replace(/\.[^.]+$/,".txt"));
-      dlAnchor.click();
+  canvas.onmousedown = function(e){
+    var r=canvas.getBoundingClientRect();
+    var x=e.clientX-r.left, y=e.clientY-r.top;
+    draggingPoint=null;
+    for(var i=0;i<boxes.length;i++){
+      var idx = boxes[i].hitPoint(x,y);
+      if(idx>=0){ selected=boxes[i]; draggingPoint=idx; redraw(); return; }
     }
-    // alert("✅ 标注已保存为 YOLO OBB 四点归一化 txt");
-  });
+    selected=null;
+    for(var i=0;i<boxes.length;i++) if(boxes[i].hit(x,y)) selected=boxes[i];
+    if(selected){ redraw(); return; }
+    start={x:x, y:y};
+    dragging=true;
+  };
+
+  canvas.onmousemove = function(e){
+    var r=canvas.getBoundingClientRect();
+    var x=e.clientX-r.left, y=e.clientY-r.top;
+    mousePos={x:x,y:y};
+
+    if(draggingPoint!==null && selected){
+      selected.points[draggingPoint]={x:x,y:y};
+      redraw(); return;
+    }
+    if(!dragging){ redraw(); return; }
+    current=new OBB(start.x,start.y,x,y);
+    redraw(); current.draw(true);
+  };
+
+  canvas.onmouseup = function(e){
+    if(dragging && current){ boxes.push(current); }
+    dragging=false; draggingPoint=null; current=null;
+    redraw();
+  };
+
+  window.onkeydown=function(e){
+    if(!selected) return;
+    if(e.key==='q') selected.rotate(-0.05);
+    if(e.key==='e') selected.rotate(0.05);
+    redraw();
+  };
+
+  function exportLabels(){
+    var lines = boxes.map(function(b){
+      var arr = [b.cls];
+      for(var i=0;i<4;i++){
+        arr.push((b.points[i].x/canvas.width).toFixed(6));
+        arr.push((b.points[i].y/canvas.height).toFixed(6));
+      }
+      return arr.join(' ');
+    });
+    var blob = new Blob([lines.join('\n')],{type:'text/plain'});
+    var a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download='labels.txt';
+    a.click();
+  }
 </script>
 </body>
 </html>
