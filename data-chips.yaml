@@ -1,4 +1,4 @@
-path: D:/Work/yolo-poker/chips-angle-bak
+path: D:/Work/yolo-poker/chips-angle
 train: images/train
 val: images/val
 names:

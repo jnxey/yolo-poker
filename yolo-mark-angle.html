@@ -18,7 +18,7 @@
     <button id="save">保存标注(.txt)</button>
     <span id="info"></span>
 </div>
-<canvas id="canvas" width="800" height="600"></canvas>
+<canvas id="canvas" width="640" height="640"></canvas>
 
 <script>
   const canvas = document.getElementById('canvas');
@@ -190,7 +190,7 @@
       dlAnchor.setAttribute("download", fname.replace(/\.[^.]+$/,".txt"));
       dlAnchor.click();
     }
-    alert("✅ 标注已保存为 YOLO OBB 四点归一化 txt");
+    // alert("✅ 标注已保存为 YOLO OBB 四点归一化 txt");
   });
 </script>
 </body>
